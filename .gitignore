@@ -1,2 +1,6 @@
+# files
+.xml
+.iml
+
 # ignore directories
 data/
