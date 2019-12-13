@@ -54,6 +54,8 @@ if __name__ == '__main__':
     projectdir = DATADIR + '/R2O_projects/update_cutoff'
     datadir = projectdir + '/data'
     plotdir = projectdir + '/figures'
+    scratchdir = SCRATCH + '/ODB2'
+    numpysavedir = scratchdir + '/cycle_sql_stats'
 
 
     # suite dictionary
@@ -71,24 +73,36 @@ if __name__ == '__main__':
     start_date = dt.datetime(2019, 6, 15, 6, 0, 0)
     end_date = dt.datetime(2019, 9, 15, 18, 0, 0)
     cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
+    cycle_range_str = [i.strftime('%Y%m%d') for i in cycle_range]
+
+    # ensure SCRATCH subdirectories are present for the ODB stats to be copied into, before further processing
+    for d in [scratchdir, numpysavedir]:
+        os.system('mkdir -p '+d)
+
+    # setup statistics dictionary (suite => cycle)
+    stats = {'tot_active':
+                {suite_i:
+                    {cycle_c: {} for cycle_c in cycle_range_str}
+                 for suite_i in suite_list.iterkeys()
+                }
+            }
 
     # loop through all suite, then plot the cross-suite statistics after the looping
     for suite_id in suite_list.iterkeys():
 
-        # find instrument list from the first non-cold start cycle and assume these instruments are present in each
-        #   cycle.
-        obs_filelist_temp = find_obs_files(cycle_range[0], model_run='glu')
-        # Instrument is the 2nd to last entry. Extract for all files at once as they follow the same naming convention
-        obs_list = [f.split('_')[-2] for f in obs_filelist_temp]
-
         # Go through each cycle in turn
-        for cycle_i in cycle_range:
+        for c, cycle_c in enumerate(cycle_range):
 
-            # cycle datestr
-            # cycle_datestr = cycle_i.strftime('%Y%m%dT%H%MZ')
+            # create cycle's stats array that will be numpy saved!
+            # separate stats for suite and cycle encase more suites or cycles are added later
+            suite_cycle_stats = {'active_per_obs_type': {}}
 
             # get obs filepaths for this cycle
-            obs_filelist = find_obs_files(cycle_range[0], model_run='glu')
+            # ToDO - could be a waste of time to check each cycle. Option for 1 check and make file paths from then on?
+            obs_filelist = find_obs_files(cycle_c, model_run='glu')
+
+            # Instrument is the 2nd to last entry. Extract for all files at once as they follow the same naming convention
+            obs_list = [f.split('_')[-2] for f in obs_filelist]
 
             ## is an entry waiting for the final value, in the dictionary/np.array?
             ## does this cycle exist
@@ -97,26 +111,27 @@ if __name__ == '__main__':
             ## is data there from mass?
 
             # get ODB data for each instrument in turn, as the files can be very large!
-            for obs_file_i in obs_filelist:
-
-
+            # loop through its moose path and the paired observation name
+            for obs_moosepath_i, obs_i in zip(obs_filelist, obs_list):
 
                 # download ODB stats into the correct directory
-                s = 'moo get '+obs_file_i+' '+datadir
+                s = 'moo get '+obs_moosepath_i+' '+scratchdir
+                os.system(s)
 
-                ## extract file
+                # get the filepath after extraction from MASS
+                filepath = scratchdir+'/'+obs_moosepath_i.split('/')[-1]
+
                 ## assume all observation files are present with each cycle
-
                 ## ungzip them
+                os.system('gunzip '+filepath)
 
+                # name of file without the .gz extension
+                filepath_unzipped = filepath[:-3]
 
-                filepath = datadir + '/surface.odb'
-                ## create sql statement to analyse them
-                ### total number of obs 'active'
 
                 # count number of observations that were included in the data assimilation,
                 #   for this ob type, cycle, suite.
-                s = 'odb sql \'select count(*) where datum_status.active \' -i '+filepath
+                s = 'odb sql \'select count(*) where datum_status.active \' -i '+filepath_unzipped
                 out = subprocess.check_output(s, shell=True)
 
                 # strip value from output string
@@ -124,10 +139,29 @@ if __name__ == '__main__':
                 split = out.strip(' ').split('\n')
                 value = float(split[1])
 
+                # append data to stats dictionary
+                suite_cycle_stats['active_per_obs_type'][obs_i] = value
+
+
+                s = 'odb sql \'select count(*) where (datum_status.active) \' -i '+filepath_unzipped
+
+
                 # remove file once its done with
+                os.remove(filepath_unzipped)
+
+            # summary stats (e.g. total active)
+            suite_cycle_stats['total_active'] = np.sum(suite_cycle_stats['active_per_obs_type'].flatten())
+
+            # numpy save this cycle's statistics
+            cycle_c_str = cycle_range_str[c]
+            numpysavepath = numpysavedir + '/' + cycle_c_str + '_stats.npy'
+            np.save(numpysavepath, suite_cycle_stats)
 
 
-                ## append data
+
+        # summary stats
+        #summary = np.nansum(stats[suite_id][cycle_i].flatten())
+        #average_cross_cycle = np.nanmean(summary[suite_id])
 
         # plot all suite data
         # inc. total number of obs ingested vs update time
