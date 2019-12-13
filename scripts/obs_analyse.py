@@ -95,7 +95,11 @@ if __name__ == '__main__':
 
             # create cycle's stats array that will be numpy saved!
             # separate stats for suite and cycle encase more suites or cycles are added later
-            suite_cycle_stats = {'active_per_obs_type': {}}
+            suite_cycle_stats = {'total_active': {},
+                                 'SH_active': {},
+                                 'NH_active': {},
+                                 'TR_active': {}
+                                 }
 
             # get obs filepaths for this cycle
             # ToDO - could be a waste of time to check each cycle. Option for 1 check and make file paths from then on?
@@ -131,20 +135,39 @@ if __name__ == '__main__':
 
                 # count number of observations that were included in the data assimilation,
                 #   for this ob type, cycle, suite.
-                s = 'odb sql \'select count(*) where datum_status.active \' -i '+filepath_unzipped
-                out = subprocess.check_output(s, shell=True)
-
                 # strip value from output string
                 # remove leading spacing and end-of-line characters
+                # then add to the stats dictionary
+                s = 'odb sql \'select count(*) where datum_status.active \' -i '+filepath_unzipped
+                out = subprocess.check_output(s, shell=True)
                 split = out.strip(' ').split('\n')
                 value = float(split[1])
+                suite_cycle_stats['total_active_per_obs_type'][obs_i] = value
 
-                # append data to stats dictionary
-                suite_cycle_stats['active_per_obs_type'][obs_i] = value
+                # Southern hemisphere
+                s = 'odb sql \'select count(*) where (datum_status.active) and (lat <= \'0\') \' -i '+filepath_unzipped
+                out = subprocess.check_output(s, shell=True)
+                split = out.strip(' ').split('\n')
+                value = float(split[1])
+                suite_cycle_stats['SH_active'][obs_i] = value
 
+                # Northern hemisphere
+                s = 'odb sql \'select count(*) where (datum_status.active) and (lat >= \'0\') \' -i '+filepath_unzipped
+                out = subprocess.check_output(s, shell=True)
+                split = out.strip(' ').split('\n')
+                value = float(split[1])
+                suite_cycle_stats['NH_active'][obs_i] = value
 
-                s = 'odb sql \'select count(*) where (datum_status.active) \' -i '+filepath_unzipped
+                # Total
+                suite_cycle_stats['total_active'][obs_i] = \
+                    suite_cycle_stats['NH_active'][obs_i] + suite_cycle_stats['SH_active'][obs_i]
 
+                # Tropics are 20 N to 20 S
+                s = 'odb sql \'select count(*) where (datum_status.active) and (lat < \'20\' and lat > \'-20\') \' -i '+filepath_unzipped
+                out = subprocess.check_output(s, shell=True)
+                split = out.strip(' ').split('\n')
+                value = float(split[1])
+                suite_cycle_stats['TR_active'][obs_i] = value
 
                 # remove file once its done with
                 os.remove(filepath_unzipped)
