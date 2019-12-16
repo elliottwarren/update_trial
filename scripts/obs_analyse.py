@@ -40,6 +40,25 @@ def find_obs_files(cycle, model_run='glu'):
 
     return files
 
+
+def sql_count_all_query(s):
+    """
+    SQL count query on an SQL database, from a list of regions.
+
+    :param s: sql count query statement
+    :return: output (float): output value from the count query
+    """
+
+    # count number of observations that were included in the data assimilation,
+    #   for this ob type, cycle, suite.
+    # strip value from output string
+    # remove leading spacing and end-of-line characters
+    out = subprocess.check_output(s, shell=True)
+    split = out.strip(' ').split('\n')
+
+    return float(split[1])
+
+
 if __name__ == '__main__':
 
     # ==============================================================================
@@ -57,7 +76,6 @@ if __name__ == '__main__':
     scratchdir = SCRATCH + '/ODB2'
     numpysavedir = scratchdir + '/cycle_sql_stats'
 
-
     # suite dictionary
     # key = ID, value = short name
     suite_list = {'u-bo976': 'CTRL',  # Control, Update = 6 hours 15 mins
@@ -68,40 +86,61 @@ if __name__ == '__main__':
                   #'u-bo857': 'M10'  # Main run = 2 hours 30 (-10 minutes) - needs to have glm not glu in mass file
                   }
 
-    # date ranges to loop over
+    # # update trial start and end dates
+    #start_date = dt.datetime(2019, 6, 15, 6, 0, 0)
+    #end_date = dt.datetime(2019, 9, 15, 18, 0, 0)
 
-    start_date = dt.datetime(2019, 6, 15, 6, 0, 0)
-    end_date = dt.datetime(2019, 9, 15, 18, 0, 0)
+    # date ranges to loop over if in a suite
+    #start_date_in=$(rose date -c -f %Y%m%d%H%M)
+
+    start_date_in = ['201906150600']
+    end_date_in = ['201906151200']
+
+    start_date = eu.dateList_to_datetime(start_date_in)[0]
+    end_date = eu.dateList_to_datetime(end_date_in)[0]
+
     cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
-    cycle_range_str = [i.strftime('%Y%m%d') for i in cycle_range]
+    cycle_range_str = [i.strftime('%Y%m%dT%H%M') for i in cycle_range]
 
     # ensure SCRATCH subdirectories are present for the ODB stats to be copied into, before further processing
     for d in [scratchdir, numpysavedir]:
         os.system('mkdir -p '+d)
 
-    # setup statistics dictionary (suite => cycle)
-    stats = {'tot_active':
-                {suite_i:
-                    {cycle_c: {} for cycle_c in cycle_range_str}
-                 for suite_i in suite_list.iterkeys()
-                }
-            }
+    # flag headers to check for and create statistics about
+    flags = ['active', 'rejected']
+
+    # regions to create statistic entries for
+    regions = ['SH', 'NH', 'TR', 'global']
+
+    # ==============================================================================
+    # Process
+    # ==============================================================================
 
     # loop through all suite, then plot the cross-suite statistics after the looping
     for suite_id in suite_list.iterkeys():
 
+        print 'working suite-id: '+suite_id
+
         # Go through each cycle in turn
         for c, cycle_c in enumerate(cycle_range):
 
+            # only continue if saves statistics do no exist already, or are to be overwritten
+
+            print '... working cycle: '+cycle_range_str[c]
+
             # create cycle's stats array that will be numpy saved!
             # separate stats for suite and cycle encase more suites or cycles are added later
-            suite_cycle_stats = {'total_active': {},
-                                 'SH_active': {},
-                                 'NH_active': {},
-                                 'TR_active': {}
+            # dictionary format will be: suite_cycle_stats[flag_i][region_i]
+            #   and after sql queries for each obs type, will eventually be:
+            #   suite_cycle_stats[flag_i][region_i][obs] = value
+            suite_cycle_stats = {flag_i:
+                                     {region_i: {} for region_i in regions}
+                                 for flag_i in flags
                                  }
 
             # get obs filepaths for this cycle
+            # use 'glu' (update run) as this is where the number of obs going in is varying, despite the impact being
+            #   on 'glm' (main run).
             # ToDO - could be a waste of time to check each cycle. Option for 1 check and make file paths from then on?
             obs_filelist = find_obs_files(cycle_c, model_run='glu')
 
@@ -112,11 +151,14 @@ if __name__ == '__main__':
             ## does this cycle exist
             #### has the last 4 or so cycles exist - if not assume the model hasn't gotten this far yet and 'break' loop
 
-            ## is data there from mass?
-
             # get ODB data for each instrument in turn, as the files can be very large!
             # loop through its moose path and the paired observation name
             for obs_moosepath_i, obs_i in zip(obs_filelist, obs_list):
+
+                # create observation entries for all obs if they do not yet exist
+
+
+                print '... ... working on obs: '+obs_i
 
                 # download ODB stats into the correct directory
                 s = 'moo get '+obs_moosepath_i+' '+scratchdir
@@ -132,61 +174,54 @@ if __name__ == '__main__':
                 # name of file without the .gz extension
                 filepath_unzipped = filepath[:-3]
 
+                # where_constriant = datum_status.active or datum_status.rejected
 
-                # count number of observations that were included in the data assimilation,
-                #   for this ob type, cycle, suite.
-                # strip value from output string
-                # remove leading spacing and end-of-line characters
-                # then add to the stats dictionary
-                s = 'odb sql \'select count(*) where datum_status.active \' -i '+filepath_unzipped
-                out = subprocess.check_output(s, shell=True)
-                split = out.strip(' ').split('\n')
-                value = float(split[1])
-                suite_cycle_stats['total_active_per_obs_type'][obs_i] = value
+                # header flags to check for in ODB databases
+                for flag_i in flags:
 
-                # Southern hemisphere
-                s = 'odb sql \'select count(*) where (datum_status.active) and (lat <= \'0\') \' -i '+filepath_unzipped
-                out = subprocess.check_output(s, shell=True)
-                split = out.strip(' ').split('\n')
-                value = float(split[1])
-                suite_cycle_stats['SH_active'][obs_i] = value
+                    print '... ... ... working on flag: '+flag_i
 
-                # Northern hemisphere
-                s = 'odb sql \'select count(*) where (datum_status.active) and (lat >= \'0\') \' -i '+filepath_unzipped
-                out = subprocess.check_output(s, shell=True)
-                split = out.strip(' ').split('\n')
-                value = float(split[1])
-                suite_cycle_stats['NH_active'][obs_i] = value
+                    # count number of observations that were included in the data assimilation,
+                    #   for this ob type, cycle, suite.
 
-                # Total
-                suite_cycle_stats['total_active'][obs_i] = \
-                    suite_cycle_stats['NH_active'][obs_i] + suite_cycle_stats['SH_active'][obs_i]
+                    # Southern hemisphere
+                    statement = 'odb sql \'select count(*) where (datum_status.'+flag_i+') and (lat <= \'0\') \' -i '+filepath_unzipped
+                    suite_cycle_stats[flag_i]['SH'][obs_i] = sql_count_all_query(statement)
 
-                # Tropics are 20 N to 20 S
-                s = 'odb sql \'select count(*) where (datum_status.active) and (lat < \'20\' and lat > \'-20\') \' -i '+filepath_unzipped
-                out = subprocess.check_output(s, shell=True)
-                split = out.strip(' ').split('\n')
-                value = float(split[1])
-                suite_cycle_stats['TR_active'][obs_i] = value
+                    # Northern hemisphere
+                    statement = 'odb sql \'select count(*) where (datum_status.'+flag_i+') and (lat >= \'0\') \' -i '+filepath_unzipped
+                    suite_cycle_stats[flag_i]['NH'][obs_i] = sql_count_all_query(statement)
+
+                    # Tropics are 20 N to 20 S
+                    statement = 'odb sql \'select count(*) where (datum_status.'+flag_i+') and (lat < \'20\' and lat > \'-20\') \' -i '+filepath_unzipped
+                    suite_cycle_stats[flag_i]['TR'][obs_i] = sql_count_all_query(statement)
+
+                    # global
+                    suite_cycle_stats[flag_i]['global'][obs_i] = \
+                        suite_cycle_stats[flag_i]['NH'][obs_i] + suite_cycle_stats[flag_i]['SH'][obs_i]
 
                 # remove file once its done with
                 os.remove(filepath_unzipped)
 
-            # summary stats (e.g. total active)
-            suite_cycle_stats['total_active'] = np.sum(suite_cycle_stats['active_per_obs_type'].flatten())
+            print '... ... computing observation totals, across flags'
 
-            # numpy save this cycle's statistics
+            # after all observation values have been acquired for all the flags.
+            for flag_i in flags:
+                for region_i in regions:
+                    suite_cycle_stats[flag_i][region_i]['all_obs'] = \
+                        np.sum([suite_cycle_stats[flag_i][region_i][obs_j] for obs_j in obs_list])
+
+            print '... ... observation totals completed!'
+
+            print '... ... saving stats as: '+numpysavepath
+
+            # numpy save this suite and cycle's statistics
             cycle_c_str = cycle_range_str[c]
-            numpysavepath = numpysavedir + '/' + cycle_c_str + '_stats.npy'
+            numpysavepath = numpysavedir + '/' + cycle_c_str + '_'+suite_id+'_stats.npy'
             np.save(numpysavepath, suite_cycle_stats)
 
+            print '... ... '+numpysavepath+' saved!'
 
+    exit(0)
 
-        # summary stats
-        #summary = np.nansum(stats[suite_id][cycle_i].flatten())
-        #average_cross_cycle = np.nanmean(summary[suite_id])
-
-        # plot all suite data
-        # inc. total number of obs ingested vs update time
-        # inc. total number of obs ingested vs update time by region (e.g. SH, NH, Europe)
 
