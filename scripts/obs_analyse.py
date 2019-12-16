@@ -213,8 +213,6 @@ if __name__ == '__main__':
 
             print '... ... observation totals completed!'
 
-            print '... ... saving stats as: '+numpysavepath
-
             # numpy save this suite and cycle's statistics
             cycle_c_str = cycle_range_str[c]
             numpysavepath = numpysavedir + '/' + cycle_c_str + '_'+suite_id+'_stats.npy'
