@@ -9,13 +9,9 @@ Created by Elliott Warren - Wed 11th Dec 2019: elliott.warren@metoffice.gov.uk
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import subprocess
 import datetime as dt
-
-import ellUtils as eu
-
 
 def find_obs_files(cycle_str, model_run='glu'):
     """
@@ -190,18 +186,16 @@ if __name__ == '__main__':
     HOME = os.getenv('HOME')
     DATADIR = os.getenv('DATADIR')
     SCRATCH = os.getenv('SCRATCH')
-    CYLC_TASK_CYCLE_POINT = os.getenv('CYLC_TASK_CYCLE_POINT')
-    ###SUITE_LIST = os.getenv('SUITE_LIST') # just get one suite id at a time! parallelise it!
+    THIS_CYCLE = os.getenv('THIS_CYCLE')
+    SUITE_I = os.getenv('SUITE_I')
 
-    projectdir = DATADIR + '/R2O_projects/update_cutoff'
-    datadir = projectdir + '/data'
-    plotdir = projectdir + '/figures'
     scratchdir = SCRATCH + '/ODB2'
     logdir = scratchdir + '/log'
     numpysavedir = scratchdir + '/cycle_sql_stats'
 
     # suite dictionary
     # key = ID, value = short name
+    # offline
     suite_list = {'u-bo976': 'CTRL',  # Control, Update = 6 hours 15 mins
                   # 'u-bp725': 'U715',  # Update = 7 hours 15 mins (ran later, therefore less data than the others)
                   'u-bo895': 'U5',  # Update = 5 hours
@@ -217,13 +211,16 @@ if __name__ == '__main__':
     # date ranges to loop over if in a suite
     # start_date_in=$(rose date -c -f %Y%m%d%H%M)
 
-    start_date_in = ['201906150600']
-    end_date_in = ['201906151200']
+    # # offline
+    # start_date_in = ['201906150600']
+    # end_date_in = ['201906151200']
+    # start_date = eu.dateList_to_datetime(start_date_in)[0]
+    # end_date = eu.dateList_to_datetime(end_date_in)[0]
+    # cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
+    # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
-    start_date = eu.dateList_to_datetime(start_date_in)[0]
-    end_date = eu.dateList_to_datetime(end_date_in)[0]
-
-    cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
+    # online
+    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
     cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
     # ensure SCRATCH subdirectories are present for the ODB stats to be copied into, before further processing
@@ -240,17 +237,16 @@ if __name__ == '__main__':
     regions = ['SH', 'NH', 'TR', 'AUS', 'EUR']
 
     # regional boundaries and the SQL query into its location
-    # NOT for global as this will be done as the sum of NH and SH!
+    # SQL query entry NOT for global as this will be done as the sum of NH and SH, and added later!
     region_bounds = {
                'NH': 'sum(lat > 0)',
                'SH': 'sum(lat < 0)',
                'TR': 'sum(20 > lat > -20)',
-               # 'EUR': 'sum((70 > lat > 25) and (-10 > lon > 28))',
                'EUR': 'sum((70 > lat > 25) and (28 > lon > -10))',
                'AUS': 'sum((-8 > lat > -45) and (157 > lon > 106))'
     }
 
-    # overide the cycle statistics?
+    # override the cycle statistics?
     OVERRIDE_CYCLE_STATS = False
 
     # create empty log file that will be filled with filepaths of bad files, if any are present
@@ -264,7 +260,8 @@ if __name__ == '__main__':
     # ==============================================================================
 
     # loop through all suite, then plot the cross-suite statistics after the looping
-    for suite_id in suite_list.iterkeys():
+    # for suite_id in suite_list.iterkeys(): if running multiple suites in one script (offline)
+    for suite_id in [SUITE_I]:  # online
 
         print 'working suite-id: '+suite_id
 
@@ -277,7 +274,7 @@ if __name__ == '__main__':
             numpysavepath = numpysavedir + '/' + cycle_c_str + '_'+suite_id+'_stats.npy'
             if os.path.exists(numpysavepath) and OVERRIDE_CYCLE_STATS:
                 print numpysavepath + ' already exists! Skipping this cycle\n\n\n'
-                continue
+                exit(0)
 
 
             print '... working cycle: '+cycle_c_str
