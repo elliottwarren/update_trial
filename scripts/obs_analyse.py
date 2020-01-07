@@ -189,9 +189,7 @@ if __name__ == '__main__':
     THIS_CYCLE = os.getenv('THIS_CYCLE')
     SUITE_I = os.getenv('SUITE_I')
 
-    scratchdir = SCRATCH + '/ODB2'
-    logdir = scratchdir + '/log'
-    numpysavedir = scratchdir + '/cycle_sql_stats'
+    THIS_CYCLE = os.getenv('CYLC_TASK_CYCLE_POINT')
 
     # suite dictionary
     # key = ID, value = short name
@@ -211,22 +209,26 @@ if __name__ == '__main__':
     # date ranges to loop over if in a suite
     # start_date_in=$(rose date -c -f %Y%m%d%H%M)
 
-    # # offline
-    # start_date_in = ['201906150600']
+    # # offline 1
+    # import ellUtils as eu
+    # start_date_in = ['201906151200']
     # end_date_in = ['201906151200']
     # start_date = eu.dateList_to_datetime(start_date_in)[0]
     # end_date = eu.dateList_to_datetime(end_date_in)[0]
     # cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
     # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
-    # online
-    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
+    # offline 2
+    #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
+    THIS_CYCLE = '20190615T1800Z'
+    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
     cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
-    # ensure SCRATCH subdirectories are present for the ODB stats to be copied into, before further processing
-    for d in [scratchdir, logdir, numpysavedir]:
-        if not os.path.exists(d):
-            os.system('mkdir -p '+d)
+    # # online
+    # #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
+    # print 'THIS_CYCLE = '+THIS_CYCLE  #  20190615T0600Z
+    # cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
+    # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
     # flag headers to check for and create statistics about
     # Note: needs to match the loop further down
@@ -247,35 +249,44 @@ if __name__ == '__main__':
     }
 
     # override the cycle statistics?
-    OVERRIDE_CYCLE_STATS = False
-
-    # create empty log file that will be filled with filepaths of bad files, if any are present
-    run_time_str = dt.datetime.now().strftime('%Y%m%dT%H%M')
-    log_file_path = logdir + '/' + run_time_str + '_obs_anaylse_log.txt'
-    with open(log_file_path, 'w') as log_file:
-        log_file.write('log for obs_analyse - ran at '+run_time_str+'\n')
+    OVERRIDE_CYCLE_STATS = True
 
     # ==============================================================================
     # Process
     # ==============================================================================
 
     # loop through all suite, then plot the cross-suite statistics after the looping
-    # for suite_id in suite_list.iterkeys(): if running multiple suites in one script (offline)
-    for suite_id in [SUITE_I]:  # online
+    for suite_id in  ['u-bo976']: # suite_list.iterkeys():  # if running multiple suites in one script (offline)
+    # for suite_id in [SUITE_I]:  # online
 
         print 'working suite-id: '+suite_id
 
+        # suite id specific directories
+        scratchdir = SCRATCH + '/ODB2/'+suite_id
+        logdir = scratchdir + '/log'
+        numpysavedir = DATADIR + '/R2O_projects/update_cutoff/data/cycle_sql_stats/'+suite_id
+
+        # ensure scratch and save subdirectories are present for the ODB stats to be copied into, before further processing
+        for d in [scratchdir, logdir, numpysavedir]:
+            if not os.path.exists(d):
+                os.system('mkdir -p '+d)
+
         # Go through each cycle in turn
         for c, cycle_c_str in enumerate(cycle_range_str):
+
+            # create empty log file that will be filled with filepaths of bad files, if any are present
+            run_time_str = dt.datetime.now().strftime('%Y%m%dT%H%M')
+            log_file_path = logdir + '/' + suite_id + '_'+ cycle_c_str + '_obs_anaylse_log.txt'
+            with open(log_file_path, 'w') as log_file:
+                log_file.write('log for obs_analyse - ran at ' + run_time_str + '\n')
 
             # create numpy save path here to check whether it already exists. If so and OVERRIDE_CYCLE_STATS
             # is set to True, then skip this cycle.
             # only continue if saves statistics do no exist already, or are to be overwritten
             numpysavepath = numpysavedir + '/' + cycle_c_str + '_'+suite_id+'_stats.npy'
-            if os.path.exists(numpysavepath) and OVERRIDE_CYCLE_STATS:
+            if os.path.exists(numpysavepath) and (OVERRIDE_CYCLE_STATS == False):
                 print numpysavepath + ' already exists! Skipping this cycle\n\n\n'
                 exit(0)
-
 
             print '... working cycle: '+cycle_c_str
 
@@ -308,8 +319,8 @@ if __name__ == '__main__':
 
             # testing
             # for obs_moosepath_i, obs_i in zip(obs_filelist[:2], obs_list[:2]):
-                # obs_moosepath_i = obs_filelist[-1]
-                # obs_i = obs_list[-1]
+            #     obs_moosepath_i = obs_filelist[6]
+            #     obs_i = obs_list[6]
 
                 print '... ... ('+str(obs_list.index(obs_i)+1)+'/'+str(len(obs_list))+') working on obs: '+obs_i
 
@@ -326,12 +337,17 @@ if __name__ == '__main__':
                     # Pro-tip! Have as much as you can in a single query to save computation time
                     out_array = sql_ODB2_select_query(region_bounds, regions, obd_odb2_filepath)
 
+                    print '... ... ... ODB2_select_query successful'
+
                     # extract out data based on the flags
                     #print suite_cycle_stats
                     extract_flag_data(suite_cycle_stats, out_array, regions, obs_i)
                     #print suite_cycle_stats
 
+                    print '... ... ... extract_flag_data successful'
+
                 except:
+
                     # write bad filename to the log
                     file_error_write(obd_odb2_filepath, log_file_path)
 
