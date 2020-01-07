@@ -218,17 +218,17 @@ if __name__ == '__main__':
     # cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
     # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
-    # offline 2
-    #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
-    THIS_CYCLE = '20190615T1800Z'
-    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
-    cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
-
-    # # online
+    # # offline 2
     # #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
-    # print 'THIS_CYCLE = '+THIS_CYCLE  #  20190615T0600Z
+    # THIS_CYCLE = '20190615T1800Z'
     # cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
     # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+
+    # online
+    #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
+    print 'THIS_CYCLE = '+THIS_CYCLE  #  20190615T0600Z
+    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
+    cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
     # flag headers to check for and create statistics about
     # Note: needs to match the loop further down
@@ -256,8 +256,8 @@ if __name__ == '__main__':
     # ==============================================================================
 
     # loop through all suite, then plot the cross-suite statistics after the looping
-    for suite_id in  ['u-bo976']: # suite_list.iterkeys():  # if running multiple suites in one script (offline)
-    # for suite_id in [SUITE_I]:  # online
+    # for suite_id in  ['u-bo976']: # suite_list.iterkeys():  # if running multiple suites in one script (offline)
+    for suite_id in [SUITE_I]:  # online
 
         print 'working suite-id: '+suite_id
 
@@ -292,7 +292,7 @@ if __name__ == '__main__':
 
             # create cycle's stats array that will be numpy saved!
             # After sql queries for each obs type, will eventually be: suite_cycle_stats[flag_i][region_i][obs] = value
-            # Add an extra entry for 'GLOBAL' ontop of the regions, as although it doesn't get called in the SQL query,
+            # Add an extra entry for 'GLOBAL' on top of the regions, as although it doesn't get called in the SQL query,
             #   it is calculated at the end separately 
             suite_cycle_stats = {flag_i:
                                      {region_i: {} for region_i in regions + ['GLOBAL']}
