@@ -46,7 +46,7 @@ def moo_ODB2_get_gunzip_file(moosepath, destdir):
     """
 
     # download ODB stats into the correct directory
-    s = 'moo get ' + moosepath + ' ' + destdir
+    s = '/opt/moose-client-wrapper/bin/moo get ' + moosepath + ' ' + destdir
     os.system(s)
 
     # get the filepath after extraction from MASS
