@@ -29,7 +29,8 @@ def find_obs_files(cycle_str, suite_id, model_run='glu'):
     if model_run not in ['glu', 'glm']:
         raise ValueError('model_run keyword argument set as {0}. Must be set as \'glu\' or'
                          ' \'glm\''.format(model_run))
-    s = '/opt/ukmo/mass/moose-client-wrapper/bin/moo ls moose:/devfc/'+suite_id+'/adhoc.file/' + cycle_str + '_' + model_run + '*_odb2.gz'
+    #/opt/ukmo/mass/moose-client-wrapper/bin/
+    s = 'moo ls moose:/devfc/'+suite_id+'/adhoc.file/' + cycle_str + '_' + model_run + '*_odb2.gz'
     out = subprocess.check_output(s, shell=True)  # output all in one string
     # split filepaths by \n. End element is empty therefore do not keep it in the split
     files = out.split('\n')[:-1]
@@ -46,7 +47,7 @@ def moo_ODB2_get_gunzip_file(moosepath, destdir):
     """
 
     # download ODB stats into the correct directory
-    s = '/opt/ukmo/mass/moose-client-wrapper/bin/moo get ' + moosepath + ' ' + destdir
+    s = 'moo get ' + moosepath + ' ' + destdir
     os.system(s)
 
     # get the filepath after extraction from MASS
@@ -195,7 +196,7 @@ if __name__ == '__main__':
     # suite dictionary
     # key = ID, value = short name
     # offline
-    suite_list = {'u-bo976': 'CTRL',  # Control, Update = 6 hours 15 mins
+    suite_list = {'u-bo796': 'CTRL',  # Control, Update = 6 hours 15 mins
                   # 'u-bp725': 'U715',  # Update = 7 hours 15 mins (ran later, therefore less data than the others)
                   'u-bo895': 'U5',  # Update = 5 hours
                   'u-bo798': 'U4',  # Update = 4 hours
