@@ -29,7 +29,7 @@ def find_obs_files(cycle_str, suite_id, model_run='glu'):
     if model_run not in ['glu', 'glm']:
         raise ValueError('model_run keyword argument set as {0}. Must be set as \'glu\' or'
                          ' \'glm\''.format(model_run))
-    s = '/opt/moose-client-wrapper/bin/moo ls moose:/devfc/'+suite_id+'/adhoc.file/' + cycle_str + '_' + model_run + '*_odb2.gz'
+    s = '/opt/ukmo/mass/moose-client-wrapper/bin/moo ls moose:/devfc/'+suite_id+'/adhoc.file/' + cycle_str + '_' + model_run + '*_odb2.gz'
     out = subprocess.check_output(s, shell=True)  # output all in one string
     # split filepaths by \n. End element is empty therefore do not keep it in the split
     files = out.split('\n')[:-1]
@@ -46,7 +46,7 @@ def moo_ODB2_get_gunzip_file(moosepath, destdir):
     """
 
     # download ODB stats into the correct directory
-    s = '/opt/moose-client-wrapper/bin/moo get ' + moosepath + ' ' + destdir
+    s = '/opt/ukmo/mass/moose-client-wrapper/bin/moo get ' + moosepath + ' ' + destdir
     os.system(s)
 
     # get the filepath after extraction from MASS
