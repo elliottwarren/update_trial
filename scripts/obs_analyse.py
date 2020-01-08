@@ -13,7 +13,7 @@ import os
 import subprocess
 import datetime as dt
 
-def find_obs_files(cycle_str, model_run='glu'):
+def find_obs_files(cycle_str, suite_id, model_run='glu'):
     """
     Find the lsit of instruments used in the DA by looking to see which ODB2 files are present in MASS.
     Assume the cycle chosen represents all cycles, and extract the list of instruments from the filepaths from
@@ -29,7 +29,7 @@ def find_obs_files(cycle_str, model_run='glu'):
     if model_run not in ['glu', 'glm']:
         raise ValueError('model_run keyword argument set as {0}. Must be set as \'glu\' or'
                          ' \'glm\''.format(model_run))
-    s = '/opt/moose-client-wrapper/bin/moo ls moose:/devfc/u-bo798/adhoc.file/' + cycle_str + '_' + model_run + '*_odb2.gz'
+    s = '/opt/moose-client-wrapper/bin/moo ls moose:/devfc/'+suite_id+'/adhoc.file/' + cycle_str + '_' + model_run + '*_odb2.gz'
     out = subprocess.check_output(s, shell=True)  # output all in one string
     # split filepaths by \n. End element is empty therefore do not keep it in the split
     files = out.split('\n')[:-1]
@@ -76,6 +76,7 @@ def sql_ODB2_select_query(region_bounds, regions, filepath):
     #  to ensure the SQL output and regions list match up
     loc_bound_query_part = ', '.join([region_bounds[loc] for loc in regions])
     # Add: where(entryno=1) for unique observations if you want to (some obs come in twice and get updated...)
+    #   hopefully having entro=1 wont screw up the 'rejected' query by removing overlapping obs ahead of time...
     statement = 'odb sql \'select datum_status.active, ops_report_flags.surplus, ' + loc_bound_query_part + ' where(entryno=1) \' -i ' + filepath
     out = subprocess.check_output(statement, shell=True)
 
@@ -305,7 +306,7 @@ if __name__ == '__main__':
             # get obs filepaths for this cycle
             # use 'glu' (update run) as this is where the number of obs going in is varying, despite the impact being
             #   on 'glm' (main run).
-            obs_filelist = find_obs_files(cycle_c_str, model_run='glu')
+            obs_filelist = find_obs_files(cycle_c_str, suite_id, model_run='glu')
 
             # are there any observations files for this cycle? Cycle may not have run yet
             if len(obs_filelist) == 0:
