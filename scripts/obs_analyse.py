@@ -75,8 +75,8 @@ def sql_ODB2_select_query(region_bounds, regions, filepath):
     # construct statement from regions_boundaries, based on the list order of [regions],
     #  to ensure the SQL output and regions list match up
     loc_bound_query_part = ', '.join([region_bounds[loc] for loc in regions])
-    # Add: where(entryno=1) for unique observations if you want to
-    statement = 'odb sql \'select datum_status.active, ops_report_flags.surplus, ' + loc_bound_query_part + '\' -i ' + filepath
+    # Add: where(entryno=1) for unique observations if you want to (some obs come in twice and get updated...)
+    statement = 'odb sql \'select datum_status.active, ops_report_flags.surplus, ' + loc_bound_query_part + ' where(entryno=1) \' -i ' + filepath
     out = subprocess.check_output(statement, shell=True)
 
     # ignore the input statement command and the empty string at the end
@@ -209,26 +209,30 @@ if __name__ == '__main__':
     # date ranges to loop over if in a suite
     # start_date_in=$(rose date -c -f %Y%m%d%H%M)
 
-    # # offline 1
-    # import ellUtils as eu
-    # start_date_in = ['201906151200']
-    # end_date_in = ['201906151200']
-    # start_date = eu.dateList_to_datetime(start_date_in)[0]
-    # end_date = eu.dateList_to_datetime(end_date_in)[0]
-    # cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
-    # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+    if THIS_CYCLE is None:
 
-    # # offline 2
-    # #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
-    # THIS_CYCLE = '20190615T1800Z'
-    # cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
-    # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+        # # offline 1
+        # import ellUtils as eu
+        # start_date_in = ['201906151200']
+        # end_date_in = ['201906151200']
+        # start_date = eu.dateList_to_datetime(start_date_in)[0]
+        # end_date = eu.dateList_to_datetime(end_date_in)[0]
+        # cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
+        # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
 
-    # online
-    #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
-    print 'THIS_CYCLE = '+THIS_CYCLE  #  20190615T0600Z
-    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
-    cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+        # offline 2
+        THIS_CYCLE = '20190615T1800Z'
+        cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
+        cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+        suite_iter_list = suite_list.keys()
+    else:
+
+        # online
+        #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
+        print 'THIS_CYCLE = '+THIS_CYCLE  #  20190615T0600Z
+        cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
+        cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+        suite_iter_list = [SUITE_I]
 
     # flag headers to check for and create statistics about
     # Note: needs to match the loop further down
@@ -257,7 +261,7 @@ if __name__ == '__main__':
 
     # loop through all suite, then plot the cross-suite statistics after the looping
     # for suite_id in  ['u-bo976']: # suite_list.iterkeys():  # if running multiple suites in one script (offline)
-    for suite_id in [SUITE_I]:  # online
+    for suite_id in suite_iter_list:  # online
 
         print 'working suite-id: '+suite_id
 
