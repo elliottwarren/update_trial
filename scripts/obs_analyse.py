@@ -78,7 +78,9 @@ def sql_ODB2_select_query(region_bounds, regions, filepath):
     loc_bound_query_part = ', '.join([region_bounds[loc] for loc in regions])
     # Add: where(entryno=1) for unique observations if you want to (some obs come in twice and get updated...)
     #   hopefully having entro=1 wont screw up the 'rejected' query by removing overlapping obs ahead of time...
-    statement = 'odb sql \'select datum_status.active, ops_report_flags.surplus, ' + loc_bound_query_part + ' where(entryno=1) \' -i ' + filepath
+    # statement = 'odb sql \'select datum_status.active, ops_report_flags.surplus, ' + loc_bound_query_part + ' where(entryno=1) \' -i ' + filepath
+    #   do not use where(entryno=1) as later duplicate observations (entryno !=1), might become the active observation
+    statement = 'odb sql \'select datum_status.active, ops_report_flags.surplus, ' + loc_bound_query_part + '\' -i ' + filepath
     out = subprocess.check_output(statement, shell=True)
 
     # ignore the input statement command and the empty string at the end
@@ -126,8 +128,8 @@ def extract_flag_data(suite_cycle_stats, out_array, regions, obs_i):
     # flag idx values
     # thinned but somehow active? (seems to be a thing for surface obs...)
     flag_idx = {'active': np.where((active_col == 1.0) & (thinned_col == 0.0))[0],
-                'rejected': np.where(active_col == 0.0)[0],
-                'thinned': np.where((active_col == 0.0) & (thinned_col == 1.0))[0],
+                'rejected': np.where(active_col == 0.0)[0],  # simply not active
+                'thinned': np.where((active_col == 0.0) & (thinned_col == 1.0))[0],  # specific flag for data thinning
                 'thinned_but_active': np.where((active_col == 1.0) & (thinned_col == 1.0))[0]}
 
     # extract and sum up all the relevent columns, for each region and flag where necessary.
@@ -143,7 +145,7 @@ def extract_flag_data(suite_cycle_stats, out_array, regions, obs_i):
     # global total per flag
     for flag_i, flag_data in suite_cycle_stats.iteritems():
         suite_cycle_stats[flag_i]['GLOBAL'][obs_i] = \
-            flag_data['NH'][obs_i] + flag_data['SH'][obs_i]
+            np.nansum(flag_data['NH'][obs_i], flag_data['SH'][obs_i])
 
     return
 
@@ -235,6 +237,7 @@ if __name__ == '__main__':
         cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
         cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
         suite_iter_list = [SUITE_I]
+        print '\n\n\nscript ran in online mode!\n\n\n'
 
     # flag headers to check for and create statistics about
     # Note: needs to match the loop further down
