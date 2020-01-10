@@ -145,7 +145,7 @@ def extract_flag_data(suite_cycle_stats, out_array, regions, obs_i):
     # global total per flag
     for flag_i, flag_data in suite_cycle_stats.iteritems():
         suite_cycle_stats[flag_i]['GLOBAL'][obs_i] = \
-            np.nansum([flag_data['NH'][obs_i], flag_data['SH'][obs_i]])
+            np.sum([flag_data['NH'][obs_i], flag_data['SH'][obs_i]])
 
     return
 
