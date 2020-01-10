@@ -140,12 +140,12 @@ def extract_flag_data(suite_cycle_stats, out_array, regions, obs_i):
                 suite_cycle_stats[flag_i][region_i][obs_i] = np.sum(out_array[flag_idx_i, i + 2])
         else:  # if flag is not present for this ob
             for i, region_i in enumerate(regions):
-                suite_cycle_stats[flag_i][region_i][obs_i] = np.nan
+                suite_cycle_stats[flag_i][region_i][obs_i] = 0.0
 
     # global total per flag
     for flag_i, flag_data in suite_cycle_stats.iteritems():
         suite_cycle_stats[flag_i]['GLOBAL'][obs_i] = \
-            np.nansum(flag_data['NH'][obs_i], flag_data['SH'][obs_i])
+            np.nansum([flag_data['NH'][obs_i], flag_data['SH'][obs_i]])
 
     return
 
