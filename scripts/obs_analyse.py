@@ -13,6 +13,85 @@ import os
 import subprocess
 import datetime as dt
 
+# ==============================================================================
+# Setup
+# ==============================================================================
+
+# directories
+HOME = os.getenv('HOME')
+DATADIR = os.getenv('DATADIR')
+SCRATCH = os.getenv('SCRATCH')
+THIS_CYCLE = os.getenv('THIS_CYCLE')
+SUITE_I = os.getenv('SUITE_I')
+
+THIS_CYCLE = os.getenv('CYLC_TASK_CYCLE_POINT')
+
+# suite dictionary
+# key = ID, value = short name
+# offline
+suite_list = {'u-bo796': 'CTRL',  # Control, Update = 6 hours 15 mins
+              # 'u-bp725': 'U715',  # Update = 7 hours 15 mins (ran later, therefore less data than the others)
+              'u-bo895': 'U5',  # Update = 5 hours
+              'u-bo798': 'U4',  # Update = 4 hours
+              'u-bo862': 'U3',  # Update = 3 hours
+              # 'u-bo857': 'M10'  # Main run = 2 hours 30 (-10 minutes) - needs to have glm not glu in mass file
+              }
+
+# # update trial start and end dates
+# start_date = dt.datetime(2019, 6, 15, 6, 0, 0)
+# end_date = dt.datetime(2019, 9, 15, 18, 0, 0)
+
+# date ranges to loop over if in a suite
+# start_date_in=$(rose date -c -f %Y%m%d%H%M)
+
+if THIS_CYCLE is None:
+
+    # # offline 1
+    # import ellUtils as eu
+    # start_date_in = ['201906151200']
+    # end_date_in = ['201906151200']
+    # start_date = eu.dateList_to_datetime(start_date_in)[0]
+    # end_date = eu.dateList_to_datetime(end_date_in)[0]
+    # cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
+    # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+
+    # offline 2
+    THIS_CYCLE = '20190615T1800Z'
+    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
+    cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+    suite_iter_list = suite_list.keys()
+else:
+
+    # online
+    #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
+    print 'THIS_CYCLE = '+THIS_CYCLE  #  20190615T0600Z
+    cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
+    cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
+    suite_iter_list = [SUITE_I]
+    print '\n\n\nscript ran in online mode!\n\n\n'
+
+# flag headers to check for and create statistics about
+# Note: needs to match the loop further down
+# ToDo have loop inside linked to this list.
+flags = ['active', 'rejected', 'thinned', 'thinned_but_active']
+
+# regions to create statistic entries for
+regions = ['SH', 'NH', 'TR', 'AUS', 'EUR']
+
+# regional boundaries and the SQL query into its location
+# SQL query entry NOT for global as this will be done as the sum of NH and SH, and added later!
+region_bounds = {
+           'NH': 'sum(lat > 0)',
+           'SH': 'sum(lat < 0)',
+           'TR': 'sum(20 > lat > -20)',
+           'EUR': 'sum((70 > lat > 25) and (28 > lon > -10))',
+           'AUS': 'sum((-8 > lat > -45) and (157 > lon > 106))'
+}
+
+# override the cycle statistics?
+OVERRIDE_CYCLE_STATS = True
+
+
 def find_obs_files(cycle_str, suite_id, model_run='glu'):
     """
     Find the lsit of instruments used in the DA by looking to see which ODB2 files are present in MASS.
@@ -88,7 +167,7 @@ def sql_ODB2_select_query(region_bounds, regions, filepath):
     # in each row, remove leading spaces and split by tab to reveal the parts of each query combination
     #   e.g. datum_status.active=1 and ops_report_flags.surplus=1, where surplus is the same as being
     #   thinned
-    out_array = np.array([n.replace(' ', '').split('\t') for n in out_split], dtype=float)
+    out_array = np.array([n.replace(' ', '').split('\t') for n in out_split], dtype=np.float32)
 
     return out_array
 
@@ -181,84 +260,6 @@ def create_metadata_num_files(obs_list, stats, flags, regions):
 
 
 if __name__ == '__main__':
-
-    # ==============================================================================
-    # Setup
-    # ==============================================================================
-
-    # directories
-    HOME = os.getenv('HOME')
-    DATADIR = os.getenv('DATADIR')
-    SCRATCH = os.getenv('SCRATCH')
-    THIS_CYCLE = os.getenv('THIS_CYCLE')
-    SUITE_I = os.getenv('SUITE_I')
-
-    THIS_CYCLE = os.getenv('CYLC_TASK_CYCLE_POINT')
-
-    # suite dictionary
-    # key = ID, value = short name
-    # offline
-    suite_list = {'u-bo796': 'CTRL',  # Control, Update = 6 hours 15 mins
-                  # 'u-bp725': 'U715',  # Update = 7 hours 15 mins (ran later, therefore less data than the others)
-                  'u-bo895': 'U5',  # Update = 5 hours
-                  'u-bo798': 'U4',  # Update = 4 hours
-                  'u-bo862': 'U3',  # Update = 3 hours
-                  # 'u-bo857': 'M10'  # Main run = 2 hours 30 (-10 minutes) - needs to have glm not glu in mass file
-                  }
-
-    # # update trial start and end dates
-    # start_date = dt.datetime(2019, 6, 15, 6, 0, 0)
-    # end_date = dt.datetime(2019, 9, 15, 18, 0, 0)
-
-    # date ranges to loop over if in a suite
-    # start_date_in=$(rose date -c -f %Y%m%d%H%M)
-
-    if THIS_CYCLE is None:
-
-        # # offline 1
-        # import ellUtils as eu
-        # start_date_in = ['201906151200']
-        # end_date_in = ['201906151200']
-        # start_date = eu.dateList_to_datetime(start_date_in)[0]
-        # end_date = eu.dateList_to_datetime(end_date_in)[0]
-        # cycle_range = eu.date_range(start_date, end_date, 6, 'hours')
-        # cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
-
-        # offline 2
-        THIS_CYCLE = '20190615T1800Z'
-        cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
-        cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
-        suite_iter_list = suite_list.keys()
-    else:
-
-        # online
-        #cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%d%H%M')]
-        print 'THIS_CYCLE = '+THIS_CYCLE  #  20190615T0600Z
-        cycle_range = [dt.datetime.strptime(THIS_CYCLE, '%Y%m%dT%H%MZ')]
-        cycle_range_str = [i.strftime('%Y%m%dT%H%MZ') for i in cycle_range]
-        suite_iter_list = [SUITE_I]
-        print '\n\n\nscript ran in online mode!\n\n\n'
-
-    # flag headers to check for and create statistics about
-    # Note: needs to match the loop further down
-    # ToDo have loop inside linked to this list.
-    flags = ['active', 'rejected', 'thinned', 'thinned_but_active']
-
-    # regions to create statistic entries for
-    regions = ['SH', 'NH', 'TR', 'AUS', 'EUR']
-
-    # regional boundaries and the SQL query into its location
-    # SQL query entry NOT for global as this will be done as the sum of NH and SH, and added later!
-    region_bounds = {
-               'NH': 'sum(lat > 0)',
-               'SH': 'sum(lat < 0)',
-               'TR': 'sum(20 > lat > -20)',
-               'EUR': 'sum((70 > lat > 25) and (28 > lon > -10))',
-               'AUS': 'sum((-8 > lat > -45) and (157 > lon > 106))'
-    }
-
-    # override the cycle statistics?
-    OVERRIDE_CYCLE_STATS = True
 
     # ==============================================================================
     # Process
