@@ -1,0 +1,87 @@
+#!jinja2
+#--------------------------------------------------------------------
+{% set QUEUE_SERIAL = "shared" %}
+
+# suites to run obs_analyse for
+{% set SUITE_LIST = ['u-bo796', 'u-bo895', 'u-bo798', 'u-bo862', 'u-bp725'] %}
+
+[cylc]
+    UTC mode = True
+
+[scheduling]
+    initial cycle point = {{ START_CYCLE }}
+    {% if END_CYCLE is defined %}
+    final cycle point = {{ END_CYCLE }}
+    {% endif %}
+
+    [[dependencies]]
+
+        [[[PT6H]]]
+            graph = """
+                {% for SUITE_I in SUITE_LIST %}
+                    #obs_analyse_{{SUITE_I}}[-PT6H] => obs_analyse_{{SUITE_I}}
+                    obs_analyse_{{SUITE_I}}[-PT18H] => obs_analyse_{{SUITE_I}}
+                    #obs_analyse_{{SUITE_I}}[-P2D] => obs_analyse_{{SUITE_I}}
+                {% endfor %}
+
+            """
+
+[runtime]
+    [[root]]
+        # These environment variables will be available to all tasks.
+        [[[environment]]]
+            PATH="$PATH:~odb/installs/odbapi/odbapi-0.10.3-ukmo-v2/gnu-4.4.7/bin"
+            SUITE_LIST = {{SUITE_LIST}}
+
+    # submit on HPC
+    [[HPC]]
+        pre-script = """
+                         module list
+                         module load cray-netcdf/4.3.2
+                         module load cray-snplauncher
+                         module load moose-client-wrapper
+                         """
+        [[[remote]]]
+            host = $(rose host-select {{ HPC_HOST }})
+        [[[job]]]
+            batch system = pbs
+            #submission retry delays = 3*PT30S, 3*PT10M, 3*PT30M
+            execution retry delays = PT0M, PT3H, PT6H, PT18H
+
+    # submit on SPICE
+    [[LINUX]]
+        [[[job]]]
+            batch system = slurm
+        [[[directives]]]
+            # Memory (RSS + file cache) in MiB.
+            --mem=512
+            --time=240
+            --qos=normal
+            # ntasks / 2 = CPU Cores (due to hyperthreading, use even numbers)
+            # http://fcm1/projects/metomi/wiki/SPICE/UserGuide#CPUsvsCores
+            --ntasks=1  # ntasks/2 ~= CPUS
+     [[[remote]]]
+            host=localhost
+            #host=vld530
+
+    [[OBS_ANALYSE]]
+       inherit = LINUX
+
+    {% for SUITE_I in SUITE_LIST %}
+    [[obs_analyse_{{SUITE_I}}]]
+		  inherit = None, OBS_ANALYSE
+        script = rose task-run --app-key=obs_analyse
+        [[[environment]]]
+           SUITE_I={{SUITE_I}}
+        #[[[directives]]]
+        #    -q = {{QUEUE_SERIAL}}
+
+    {% endfor %}
+
+
+
+
+
+
+
+
