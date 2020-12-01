@@ -69,7 +69,7 @@
 
     {% for SUITE_I in SUITE_LIST %}
     [[obs_analyse_{{SUITE_I}}]]
-		  inherit = None, OBS_ANALYSE
+        inherit = None, OBS_ANALYSE
         script = rose task-run --app-key=obs_analyse
         [[[environment]]]
            SUITE_I={{SUITE_I}}
