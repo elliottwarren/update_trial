@@ -167,7 +167,7 @@ def sql_ODB2_select_query(region_bounds, regions, filepath):
     # in each row, remove leading spaces and split by tab to reveal the parts of each query combination
     #   e.g. datum_status.active=1 and ops_report_flags.surplus=1, where surplus is the same as being
     #   thinned
-    out_array = np.array([n.replace(' ', '').split('\t') for n in out_split], dtype=np.float32)
+    out_array = np.array([n.replace(' ', '').split('\t') for n in out_split], dtype=np.float16)
 
     return out_array
 
