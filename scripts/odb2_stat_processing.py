@@ -11,6 +11,7 @@ import os
 import subprocess
 import datetime as dt
 import ellUtils as eu
+import matplotlib
 import matplotlib.pyplot as plt
 
 # ==============================================================================
@@ -21,13 +22,14 @@ import matplotlib.pyplot as plt
 HOME = os.getenv('HOME')
 DATADIR = os.getenv('DATADIR')
 
-SAVEDIR = DATADIR + '/R2O_projects/update_cutoff/figures'
+PROJECT_DIR = DATADIR + '/R2O_projects/update_cutoff/'
+SAVEDIR = PROJECT_DIR + 'figures'
 
 # suite dictionary
 # key = ID, value = short name
 # offline
-SUITE_DICT = {'u-bo796': {'time_length': 6.25, 'colour': 'black'},  # Control, Update = 6 hours 15 mins
-              # 'u-bp725': 'U715',  # Update = 7 hours 15 mins (ran later, therefore less data than the others)
+SUITE_DICT = {'u-bp725': {'time_length': 7.25, 'colour': 'purple'},  # Update = 7 hours 15 mins (ran later, therefore less data than the others)
+              'u-bo796': {'time_length': 6.25, 'colour': 'black'},  # Control, Update = 6 hours 15 mins
               'u-bo895': {'time_length': 5.0, 'colour': 'red'},  # Update = 5 hours
               'u-bo798': {'time_length': 4.0, 'colour': 'blue'},  # Update = 4 hours
               'u-bo862': {'time_length': 3.0, 'colour': 'green'},  # Update = 3 hours
@@ -36,8 +38,7 @@ SUITE_DICT = {'u-bo796': {'time_length': 6.25, 'colour': 'black'},  # Control, U
 
 # update trial start and end dates
 START_DATE = dt.datetime(2019, 6, 15, 6, 0, 0)
-END_DATE = dt.datetime(2019, 7, 30, 18, 0, 0)
-# end_date = dt.datetime(2019, 9, 15, 18, 0, 0)
+END_DATE = dt.datetime(2019, 9, 15, 18, 0, 0)
 
 # each cycle
 DATE_RANGE = eu.date_range(START_DATE, END_DATE, 6, 'hours')
@@ -46,7 +47,7 @@ DATE_RANGE = eu.date_range(START_DATE, END_DATE, 6, 'hours')
 # start_date_in=$(rose date -c -f %Y%m%d%H%M)
 
 # ascending order for update time length
-SUITE_LIST = ['u-bo862', 'u-bo798', 'u-bo895', 'u-bo796']
+SUITE_LIST = ['u-bo862', 'u-bo798', 'u-bo895', 'u-bo796', 'u-bp725']
 
 CONTROL_SUITE = 'u-bo796'
 
@@ -84,6 +85,10 @@ UPDATE_TIME_LIST = [SUITE_DICT[suite_id]['time_length'] for suite_id in SUITE_LI
 
 # fixed list order to the obs catagories
 OBS_LIST_CATS = OBS_DICT_CATS.keys()
+
+# colourmap for catagory plotting (hard coded for 11 colours)
+CMAP_COLOURS = [list(i) for i in matplotlib.cm.get_cmap('tab10').colors]
+CMAP_COLOURS.append([0.15, 0.15, 0.7])
 
 # ==============================================================================
 # Functions
@@ -150,22 +155,25 @@ def plot_total_mean_obs(region_summary):
 
         for region in REGION_LIST:
 
-            #print region
+            # normalise the total and stdev
+            total_mean = np.array([region_summary[suite_id][flag][region]['total']/
+                                   region_summary[CONTROL_SUITE][flag][region]['total'] for suite_id in SUITE_LIST])
 
-            total_mean = np.array([region_summary[suite_id][flag][region]['total'] for suite_id in SUITE_LIST])/ \
-                region_summary[CONTROL_SUITE][flag][region]['total']
-            stdev_mean = np.array([region_summary[suite_id][flag][region]['stdev'] for suite_id in SUITE_LIST])/ \
-                region_summary[CONTROL_SUITE][flag][region]['total']
+            # stdev for each suite already pre calculated. Find out its relative value compared to the total of each
+            #   suite (to normalise it), so it can be plotted.
+            stdev_mean = np.array([region_summary[suite_id][flag][region]['stdev']/
+                                   region_summary[suite_id][flag][region]['total'] for suite_id in SUITE_LIST])
 
             stdev_minus2 = (total_mean - (2.0*stdev_mean))
             stdev_plus2 = total_mean + (2.0*stdev_mean)
 
-            ax = plt.plot(UPDATE_TIME_LIST, total_mean, color=REGION_COLOURS[region], marker='o', label=region)  # total mean          # color=flag_colours[flag]
-            plt.fill_between(UPDATE_TIME_LIST, stdev_minus2, stdev_plus2, color=REGION_COLOURS[region], alpha=0.1)  # +/- 2 stdev
+            ax = plt.plot(UPDATE_TIME_LIST, total_mean, color=REGION_COLOURS[region], marker='o', label=region)
+            plt.fill_between(UPDATE_TIME_LIST, stdev_minus2, stdev_plus2, color=REGION_COLOURS[region], alpha=0.1)
             plt.plot(UPDATE_TIME_LIST, stdev_plus2, color=REGION_COLOURS[region], linestyle='--', alpha=0.4)  #
             plt.plot(UPDATE_TIME_LIST, stdev_minus2, color=REGION_COLOURS[region], linestyle='--', alpha=0.4)  #
 
             # prettify
+            plt.axhline(1, linestyle='--')
             plt.xlabel('update time [hours]')
             plt.ylabel('number of obs')
             plt.suptitle('total mean number of obs (normed to control): '+flag)
@@ -179,6 +187,221 @@ def plot_total_mean_obs(region_summary):
     return
 
 
+def plot_mean_obs_by_type_stacked_line(region_summary):
+
+    """
+    Stacked line plot showing observation catagories against update cutoff time. Plotted for each region separately.
+    :param region_summary:
+    :return:
+    """
+
+    for flag in FLAG_LIST:
+
+        print flag
+
+        for region in REGION_LIST:
+
+            savedir_total_mean_obs = SAVEDIR + '/total_cat_mean_normed_suite_id/' + region
+            if os.path.exists(savedir_total_mean_obs) == False:
+                os.system('mkdir -p ' + savedir_total_mean_obs)
+
+            # normalise the data with respect to the total obs in each suite.
+            # Dictionary becomes {cat_1:[suite1, suite2, suite3 ...], cat2: [suite1, suite2 ...] ...}
+
+            # CTRL vs suite. Change what it is normalised with respect to here AND change the save directory
+            norm_cat_array = np.array([[region_summary[suite_id][flag][region]['cat_total'][cat_i] /
+                                        region_summary[suite_id][flag][region]['total'] for suite_id in SUITE_LIST]
+                                       for cat_i in OBS_LIST_CATS])
+
+            fig = plt.figure(figsize=(7, 5))
+            ax = plt.subplot(111)
+
+            st_plt = plt.stackplot(UPDATE_TIME_LIST, *norm_cat_array, labels=OBS_LIST_CATS, colors=CMAP_COLOURS)
+
+            # prettify
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+            plt.legend(loc='center left', fontsize=8, bbox_to_anchor=(1, 0.5))
+            ax.autoscale(enable=True, axis='x', tight=True)
+            #plt.axhline(1.0, color='black')
+            plt.suptitle('total mean number of obs by type (normed to suite_id): ' + flag + '; ' + region)
+            plt.xlabel('update time [hours]')
+            plt.ylabel('number of obs')
+            plt.savefig(savedir_total_mean_obs + '/total_by_cat_' + flag)
+
+
+
+            plt.close()
+
+    return
+
+def plot_mean_obs_by_type_bar(region_summary):
+
+    """
+    Stacked bar plot showing the same data as in the stacked line plot above, but in bar form.
+    :param region_summary:
+    :return:
+    """
+    for flag in FLAG_LIST:
+
+        print flag
+
+        for region in REGION_LIST:
+
+            savedir_total_mean_obs_bar = SAVEDIR + '/total_cat_mean_bar/' + region
+            if os.path.exists(savedir_total_mean_obs_bar) == False:
+                os.system('mkdir -p ' + savedir_total_mean_obs_bar)
+
+            # normalise the data with respect to the total obs in each suite.
+            # Dictionary becomes {cat_1:[suite1, suite2, suite3 ...], cat2: [suite1, suite2 ...] ...}
+
+            # CTRL vs suite. Change what it is normalised with respect to here AND change the save directory
+            norm_cat_array = np.array([[region_summary[suite_id][flag][region]['cat_total'][cat_i] /
+                                        region_summary[suite_id][flag][region]['total'] for suite_id in SUITE_LIST]
+                                       for cat_i in OBS_LIST_CATS])
+
+            fig = plt.figure(figsize=(7, 5))
+            ax = plt.subplot(111)
+
+            ind = np.arange(len(UPDATE_TIME_LIST))
+            width = 0.40
+
+            bottom = np.zeros(len(UPDATE_TIME_LIST))
+            for i, cat_i in enumerate(OBS_LIST_CATS):
+                colour_i = CMAP_COLOURS[i]
+                plt.bar(ind, norm_cat_array[i, :], width, bottom=bottom, label=cat_i, color=colour_i)
+                bottom = bottom + norm_cat_array[i, :]
+
+            # prettify
+            plt.suptitle('total mean number of obs by type (normed to suite_id): ' + flag + '; ' + region)
+            plt.xlabel('update time [hours]')
+            plt.ylabel('number of obs')
+            plt.xticks(ind, UPDATE_TIME_LIST)
+
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+            plt.legend(loc='center left', fontsize=8, bbox_to_anchor=(1, 0.5))
+            plt.savefig(savedir_total_mean_obs_bar + '/total_by_cat_' + flag)
+
+            plt.close()
+
+    return
+
+
+def save_table_mean_obs_csv(region_summary):
+
+    """
+    Save the mean number of observations by category type, for each region, as a csv.
+    :param region_summary:
+    :return:
+    """
+
+    print('saving catagory tables...')
+    for flag in FLAG_LIST:
+
+        for region in REGION_LIST:
+
+            # create float array counting number of obs in each catagory (shape = (catagory, update-time))
+            cat_array = np.array(
+                [[region_summary[suite_id][flag][region]['cat_total'][cat_i] for suite_id in SUITE_LIST]
+                 for cat_i in OBS_LIST_CATS])
+
+            # append a full total for each cutoff time
+            total = np.sum(cat_array, axis=0)
+            cat_array = np.concatenate((cat_array, total[None, :]), axis=0)
+
+            # convert float array numbers to scientific notation (dtype=string)
+            cat_table = np.array(cat_array, dtype='S')
+            #for i in range(cat_array.shape[0]):
+            #    for j in range(cat_array.shape[1]):
+            #        cat_table[i, j] = '%.2e' % cat_array[i, j]
+
+            # append catagory row headers (1D str array)
+            # add a total catagory label on the end
+            # Need [:, None] to make array 2D in shape
+            cat_list = np.array(OBS_LIST_CATS + ['total'])
+            cat_table = np.concatenate((cat_list[:, None], cat_table), axis=1)
+
+            # append update cutoff time column headers (1D str array)
+            # need the first entry to be a square to act as the top left empty square in the table.
+            update_list_start_buffer = [''] + UPDATE_TIME_LIST
+            update_array_str = np.array(update_list_start_buffer, dtype='S')
+            cat_table = np.concatenate((update_array_str[None, :], cat_table), axis=0)
+
+            # if numbers were saved in standard form, they count as a different string type. Convert all strings
+            #   into a common type
+            cat_table = cat_table.astype('S32')
+
+            # save filename and ensure directory exists
+            table_dir = PROJECT_DIR + 'data/category_tables/' + region + '/'
+            if os.path.exists(table_dir) == False:
+                os.system('mkdir -p ' + table_dir)
+
+            filename = table_dir + flag + '_mean_total_obs.csv'
+
+            # save table as csv. Function needs fmt arg='%s' due to the mix of scientific string notation, and
+            #   normal strings (headers)
+            np.savetxt(filename, cat_table, delimiter=',', fmt='%s')
+
+    return
+
+
+def plot_mean_obs_by_type_bar_regions(region_summary):
+
+    """
+    Plots stacked bar chart for all regions, showing the proportion of different observation types assimilated
+    into the control suite.
+
+    :param region_summary:
+    :return:
+    """
+
+    for flag in FLAG_LIST:
+
+        print flag
+
+        # list of length REGION_LIST
+        # each element, relative proportion of obs by category
+        norm_cat_array = np.array([[region_summary[CONTROL_SUITE][flag][region]['cat_total'][cat_i] /
+                                    region_summary[CONTROL_SUITE][flag][region]['total'] for cat_i in OBS_LIST_CATS]
+                                   for region in REGION_LIST])
+
+        stdev_mean = np.array([[region_summary[CONTROL_SUITE][flag][region]['stdev'] /
+                                region_summary[CONTROL_SUITE][flag][region]['total'] for cat_i in OBS_LIST_CATS]
+                               for region in REGION_LIST])
+
+        savedir_prop = SAVEDIR + '/proportion_obs_cats_' + CONTROL_SUITE + '_' + region
+        if os.path.exists(savedir_prop) == False:
+            os.system('mkdir -p ' + savedir_prop)
+
+        fig = plt.figure(figsize=(7, 5))
+        ax = plt.subplot(111)
+
+        ind = np.arange(len(REGION_LIST))
+        width = 0.40
+
+        bottom = np.zeros(len(REGION_LIST))
+        for i, cat_i in enumerate(OBS_LIST_CATS):
+            colour_i = CMAP_COLOURS[i]
+            plt.bar(ind, norm_cat_array[:, i], width, bottom=bottom, label=cat_i, color=colour_i)
+            bottom = bottom + norm_cat_array[:, i]
+
+        # prettify
+        plt.suptitle('total mean number of obs by type: ' + flag)
+        plt.xlabel('Region')
+        plt.xticks(ind, REGION_LIST)
+        plt.ylabel('proportion of total mean observations')
+
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        plt.legend(loc='center left', fontsize=8, bbox_to_anchor=(1, 0.5))
+
+        plt.savefig(savedir_prop + '/total_by_region_' + flag)
+
+        plt.close()
+
+    return
+
 if __name__ == '__main__':
 
     # ==============================================================================
@@ -190,7 +413,7 @@ if __name__ == '__main__':
     # initialise the dictionaries ready
     suite_meta = {key: {} for key in SUITE_LIST}
 
-    # large nested loop: suite_cycle_stats => suite => flag => region => obs
+    # large nested dict: suite_cycle_stats => suite => flag => region => obs
     suite_data = {suite_id:{
                      flag_i: {
                          region_i: {
@@ -212,7 +435,7 @@ if __name__ == '__main__':
                        date_i.strftime('%Y%m%dT%H%MZ')+'_'+suite_id+'_stats.npy'
 
             # extract statistics and metadata
-            raw = np.load(filepath).flat[0]
+            raw = np.load(filepath, allow_pickle=True).flat[0]
             suite_cycle_meta = raw['suite_cycle_meta']
             suite_cycle_stats = raw['suite_cycle_stats']
 
@@ -227,14 +450,6 @@ if __name__ == '__main__':
             # add the data
             for key, item in suite_cycle_meta.items():
                 suite_meta[suite_id][key] += [item]
-
-            # # extract and append data to the dictionary
-            # # set up dictionary for flag and region. Obs will be filled in later
-            # if suite_data[suite_id] == {}:
-            #     for flag, flag_dict in suite_cycle_stats.items():       # active, rejected, thinned
-            #         suite_data[suite_id][flag] = {}
-            #         for region in flag_dict.keys():
-            #             suite_data[suite_id][flag][region] = {}
 
             # now fill the data in. The float values in [suite_cycle_stats] will be taken out and appended to lists
             for flag in FLAG_LIST:
@@ -257,7 +472,7 @@ if __name__ == '__main__':
 
     # --------------------
     # large nested loop: suite_cycle_stats => suite => flag => region => obs
-    region_summary = {suite_id:{
+    region_summary = {suite_id: {
                      flag_i: {
                          region_i: {}
                          for region_i in REGION_LIST}
@@ -279,55 +494,47 @@ if __name__ == '__main__':
                     cat_i:   np.nansum([cycle_summary_stats[suite_id][flag][region][obs]['mean'] for obs in OBS_DICT_CATS[cat_i]])
                         for cat_i in OBS_DICT_CATS.keys()}
 
-                # total across all catagories
+
+    # ==============================================================================
+    # Plotting
+    # ==============================================================================
+
+    # 0. PLot up metadata statistics on what was available, before plotting the data statistics
+    fig = plt.figure(figsize=(7, 5))
+    for suite_id in SUITE_LIST:
+        plt.plot_date(DATE_RANGE, suite_meta[suite_id]['number_obs_used_in_stats'],
+                      fmt='-', drawstyle='steps', color=SUITE_DICT[suite_id]['colour'], label=suite_id+' ('+str(SUITE_DICT[suite_id]['time_length'])+')')
+
+    ax=plt.gca()
+    ax.tick_params(axis='x', rotation=45)
+    plt.ylabel('Frequency')
+    plt.xlabel('date [YYYY-MM-DD]')
+    plt.xlim([DATE_RANGE[0], DATE_RANGE[-1]])
+    plt.ylim([20.0, 26.0])  # readjust y
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.savefig(SAVEDIR +'/missing ODB2_files.png')
+
 
 
     # plot mean number of obs vs update length (cycle_summary_stats[flag][region][obs]['mean'])
 
-    # 1. total mean number of observations, per flag, per region vs update time length
+    # 1. total mean number of observations, per flag, per region vs update time length (line with stdev shaded)
     plot_total_mean_obs(region_summary)
 
-    # 2. plot mean number of obs split by category
-    for flag in FLAG_LIST:
+    # 2. plot mean number of obs split by category (stacked lineplot)
+    plot_mean_obs_by_type_stacked_line(region_summary)
 
-        print flag
+    # 3. Tables for the number of observations in each catagory, against cut-off time
+    # Saves arrays as .csv files to be opened and saved in excel or libre office calc
+    save_table_mean_obs_csv(region_summary)
 
-        for region in REGION_LIST:
-
-            savedir_total_mean_obs = SAVEDIR + '/total_cat_mean_normed_suite_id/'+region
-            if os.path.exists(savedir_total_mean_obs) == False:
-                os.system('mkdir -p ' + savedir_total_mean_obs)
+    # 4. Proportion of observation types per region together in a single chart, for the control suite (bar chart)
+    plot_mean_obs_by_type_bar_regions(region_summary)
 
 
-            # normalise the data with respect to the total obs in each suite.
-            # Dictionary becomes {cat_1:[suite1, suite2, suite3 ...], cat2: [suite1, suite2 ...] ...}
-            norm_cat = {cat_i:[region_summary[suite_id][flag][region]['cat_total'][cat_i] /
-                               region_summary[suite_id][flag][region]['total'] for suite_id in SUITE_LIST]
-                        for cat_i in OBS_DICT_CATS.keys()}
 
-            # CTRL vs suite. Change what it is normalised with respect to here AND change the save directory
-            norm_cat_array = np.array([[region_summary[suite_id][flag][region]['cat_total'][cat_i] /
-                               region_summary[suite_id][flag][region]['total'] for suite_id in SUITE_LIST]
-                        for cat_i in OBS_LIST_CATS])
 
-            fig = plt.figure(figsize=(7, 5))
-            ax = plt.subplot(111)
-
-            #for i, cat_i in enumerate(OBS_DICT_CATS):
-            plt.stackplot(UPDATE_TIME_LIST, *norm_cat_array, labels=OBS_LIST_CATS)
-
-            # pretify
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-            plt.legend(loc='center left', fontsize=8, bbox_to_anchor=(1, 0.5))
-            ax.autoscale(enable=True, axis='x', tight=True)
-            plt.axhline(1.0, color='black')
-            plt.suptitle('total mean number of obs by type (normed to suite_id): '+flag+'; '+region )
-            plt.xlabel('update time [hours]')
-            plt.ylabel('number of obs')
-            plt.savefig(savedir_total_mean_obs +'/total_by_cat_'+flag)
-
-            plt.close()
 
 
 
