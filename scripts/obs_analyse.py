@@ -2,6 +2,7 @@
 
 """
 Script to analyse the observations that get integrated into the data assimilation process, for a suite run
+Branched: Aimed at processing aircraft wind and RH specifically.
 
 Ensure PATH=$PATH:~odb/installs/odbapi/odbapi-0.10.3-ukmo-v2/gnu-4.4.7/bin is ran in the shell first!
 
